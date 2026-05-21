@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Navbar } from '@/components/Navbar';
-import { Button } from '@/components/Button';
-import { apiFetch } from '@/services/api';
-import { BookingModal } from '@/components/BookingModal';
-import { CarCard } from '@/components/CarCard';
-import { FilterModal } from '@/components/FilterModal';
+import React, { useEffect, useState } from "react";
+import { Navbar } from "@/components/Navbar";
+import { Button } from "@/components/Button";
+import { apiFetch } from "@/services/api";
+import { BookingModal } from "@/components/BookingModal";
+import { CarCard } from "@/components/CarCard";
+import { FilterModal } from "@/components/FilterModal";
 
 interface Car {
   barcode: string;
@@ -21,27 +21,65 @@ interface Car {
   imageUrl?: string;
 }
 
+interface Location {
+  code: string;
+  name: string;
+}
+
 export default function Home() {
   const [searchParams, setSearchParams] = useState({
-    pickupLocation: 'IST-AIR',
-    pickupDate: '',
-    dropoffDate: '',
-    category: '',
-    transmissionType: '',
-    minPrice: '',
-    maxPrice: '',
-    minSeats: '',
+    pickupLocation: "",
+    pickupDate: "",
+    dropoffDate: "",
+    category: "",
+    transmissionType: "",
+    minPrice: "",
+    maxPrice: "",
+    minSeats: "",
   });
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchLocations = async () => {
+      setLoadingLocations(true);
+      try {
+        const res = await apiFetch("/api/locations");
+        if (!res.ok) return;
+
+        const data: Location[] = await res.json();
+        if (!isMounted) return;
+
+        setLocations(data);
+        if (!searchParams.pickupLocation && data.length > 0) {
+          setSearchParams((prev) => ({
+            ...prev,
+            pickupLocation: data[0].code,
+          }));
+        }
+      } finally {
+        if (isMounted) setLoadingLocations(false);
+      }
+    };
+
+    fetchLocations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [searchParams.pickupLocation]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     setCars([]);
 
     try {
@@ -52,7 +90,8 @@ export default function Home() {
       };
 
       if (searchParams.category) params.category = searchParams.category;
-      if (searchParams.transmissionType) params.transmissionType = searchParams.transmissionType;
+      if (searchParams.transmissionType)
+        params.transmissionType = searchParams.transmissionType;
       if (searchParams.minPrice) params.minPrice = searchParams.minPrice;
       if (searchParams.maxPrice) params.maxPrice = searchParams.maxPrice;
       if (searchParams.minSeats) params.minSeats = searchParams.minSeats;
@@ -60,17 +99,17 @@ export default function Home() {
       const queryParams = new URLSearchParams(params).toString();
 
       const res = await apiFetch(`/api/cars/search?${queryParams}`);
-      
+
       if (res.ok) {
         const data = await res.json();
         setCars(data);
       } else if (res.status === 404) {
-        setError('No cars available for the selected criteria.');
+        setError("No cars available for the selected criteria.");
       } else {
-        setError('Failed to fetch cars. Please try again.');
+        setError("Failed to fetch cars. Please try again.");
       }
     } catch (err) {
-      setError('An error occurred. Please check your connection.');
+      setError("An error occurred. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -79,7 +118,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      
+
       {/* Hero Section */}
       <div className="bg-action-black py-16 px-4">
         <div className="max-w-7xl mx-auto text-center">
@@ -95,63 +134,109 @@ export default function Home() {
       {/* Search Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
         <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-100">
-          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 items-end">
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-col md:flex-row gap-4 items-end"
+          >
             <div className="flex-1 w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Location</label>
-              <select 
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pickup Location
+              </label>
+              <select
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-primary-yellow focus:border-primary-yellow"
                 value={searchParams.pickupLocation}
-                onChange={(e) => setSearchParams({...searchParams, pickupLocation: e.target.value})}
+                onChange={(e) =>
+                  setSearchParams({
+                    ...searchParams,
+                    pickupLocation: e.target.value,
+                  })
+                }
+                disabled={loadingLocations}
               >
-                <option value="IST-AIR">Istanbul (IST-AIR)</option>
-                <option value="SAW-AIR">Sabiha (SAW-AIR)</option>
+                {locations.map((location) => (
+                  <option key={location.code} value={location.code}>
+                    {location.name} ({location.code})
+                  </option>
+                ))}
               </select>
             </div>
             <div className="flex-1 w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date</label>
-              <input 
-                type="datetime-local" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pickup Date
+              </label>
+              <input
+                type="datetime-local"
                 required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-primary-yellow focus:border-primary-yellow"
                 value={searchParams.pickupDate}
-                onChange={(e) => setSearchParams({...searchParams, pickupDate: e.target.value})}
+                onChange={(e) =>
+                  setSearchParams({
+                    ...searchParams,
+                    pickupDate: e.target.value,
+                  })
+                }
               />
             </div>
             <div className="flex-1 w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dropoff Date</label>
-              <input 
-                type="datetime-local" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dropoff Date
+              </label>
+              <input
+                type="datetime-local"
                 required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-primary-yellow focus:border-primary-yellow"
                 value={searchParams.dropoffDate}
-                onChange={(e) => setSearchParams({...searchParams, dropoffDate: e.target.value})}
+                onChange={(e) =>
+                  setSearchParams({
+                    ...searchParams,
+                    dropoffDate: e.target.value,
+                  })
+                }
               />
             </div>
-            <Button type="submit" disabled={loading} className="w-full md:w-auto h-[42px] px-8">
-              {loading ? '...' : 'Search'}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full md:w-auto h-[42px] px-8"
+            >
+              {loading ? "..." : "Search"}
             </Button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="w-full md:w-[42px] h-[42px] flex items-center justify-center rounded-md border-2 border-action-black text-action-black hover:bg-gray-100 transition-colors relative"
               onClick={() => setShowFilters(true)}
               title="Advanced Filters"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
               {Object.values({
                 category: searchParams.category,
                 transmissionType: searchParams.transmissionType,
                 minPrice: searchParams.minPrice,
                 maxPrice: searchParams.maxPrice,
-                minSeats: searchParams.minSeats
+                minSeats: searchParams.minSeats,
               }).filter(Boolean).length > 0 && (
                 <span className="absolute -top-2 -right-2 bg-primary-yellow text-action-black text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border border-white">
-                  {Object.values({
-                    category: searchParams.category,
-                    transmissionType: searchParams.transmissionType,
-                    minPrice: searchParams.minPrice,
-                    maxPrice: searchParams.maxPrice,
-                    minSeats: searchParams.minSeats
-                  }).filter(Boolean).length}
+                  {
+                    Object.values({
+                      category: searchParams.category,
+                      transmissionType: searchParams.transmissionType,
+                      minPrice: searchParams.minPrice,
+                      maxPrice: searchParams.maxPrice,
+                      minSeats: searchParams.minSeats,
+                    }).filter(Boolean).length
+                  }
                 </span>
               )}
             </button>
@@ -161,31 +246,35 @@ export default function Home() {
 
       {/* Results Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {error && <p className="text-center text-red-500 font-medium">{error}</p>}
-        
+        {error && (
+          <p className="text-center text-red-500 font-medium">{error}</p>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {cars.map((car) => (
-            <CarCard 
-              key={car.barcode} 
-              car={car} 
-              onBookNow={() => setSelectedCar(car)} 
+            <CarCard
+              key={car.barcode}
+              car={car}
+              onBookNow={() => setSelectedCar(car)}
             />
           ))}
         </div>
       </div>
 
       {selectedCar && (
-        <BookingModal 
-          car={selectedCar} 
-          searchParams={searchParams} 
-          onClose={() => setSelectedCar(null)} 
+        <BookingModal
+          car={selectedCar}
+          searchParams={searchParams}
+          onClose={() => setSelectedCar(null)}
         />
       )}
 
       {showFilters && (
-        <FilterModal 
+        <FilterModal
           filters={searchParams}
-          setFilters={(newFilters) => setSearchParams({...searchParams, ...newFilters})}
+          setFilters={(newFilters) =>
+            setSearchParams({ ...searchParams, ...newFilters })
+          }
           onClose={() => setShowFilters(false)}
         />
       )}
